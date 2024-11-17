@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import math
 
 
+
 def extraer_paradas(data):
 
     # Creo un diccionario vacío para almacenar las paradas
@@ -51,6 +52,8 @@ def extraer_paradas(data):
 def construir_grafo(data):
 
     maximo_trenes = data["rs_info"]["max_rs"]
+    ## EJERCICIO 5 ## --> limite de trenes que pueden pasar la noche
+    # maximo_noche = data["rs_info"]["max_night_capacity"]
     capacidad_vagon = data["rs_info"]["capacity"]
 
     paradas = extraer_paradas(data)
@@ -72,11 +75,7 @@ def construir_grafo(data):
 
         # Agregar la arista que une los nodos con la demanda correspondiente
         # Tipo: "service" para indicar que es una arista de servicio
-        G.add_edge(nodo_origen, nodo_destino, 
-                   costo=0, 
-                   min=demanda, 
-                   max=maximo_trenes,
-                   type="service" ) #
+        G.add_edge(nodo_origen, nodo_destino, demand=demanda, type='servicio', capacity=maximo_trenes-demanda, costo=0, min=demanda, max=maximo_trenes) #
         ######################################################################capacity=maximo_trenes-demanda ???? --> si no lo pongo me da negative cycle with infinite capacity found --> preguntar por que
         
     ###### AGREGAR ARISTAS DE TRANSBORDO Y TRASNOCHE ######
@@ -104,24 +103,18 @@ def construir_grafo(data):
         ##### TRASNOCHE
         nodo_origen = estaciones[estacion][-1]
         nodo_destino = estaciones[estacion][0]
-        G.add_edge(nodo_origen, nodo_destino, 
-                   type='trasnoche', 
-                   costo=1, 
-                   min=0, 
-                   max=maximo_trenes)
+        ## NOTA EJERCICIO 5 ## --> incorporo el limite de trenes a la cota superior de la arista de TRASNOCHE. Eso seria min = maximo_noche
+        G.add_edge(nodo_origen, nodo_destino, demand=0, type='trasnoche', capacity=float("inf"), costo=1, min=0, max=maximo_trenes)
 
         ##### TRASPASO
         for i in range(len(nodos) - 1):
             nodo_origen = nodos[i]
             nodo_destino = nodos[i + 1]
-            G.add_edge(nodo_origen, nodo_destino,
-                        type='traspaso',
-                        costo=0,
-                        min=0, 
-                        max=maximo_trenes)
+            G.add_edge(nodo_origen, nodo_destino, demand=0, type='traspaso', capacity=float("inf"), costo=0, min=0, max=maximo_trenes)
 
     print(f"\nNodos: {G.nodes}\n\nAristas: {G.edges}")
     return G
+
 
 def cant_minima_vagones(G):
     # Imprimir demandas de los nodos
@@ -155,8 +148,110 @@ def cant_minima_vagones(G):
 
     print(f"Total units at Retiro: {total_units_retiro} vagones")
     print(f"Total units at Tigre: {total_units_tigre} vagones")
+    print(f"Total units: {total_units_retiro + total_units_tigre} vagones")
 
     return total_units_retiro, total_units_tigre
+
+
+def grafico(G, flow_dict, estaciones):
+
+    # posicion de los nodos
+    pos = {}
+
+    # divide a nodos depende de la estacion y los ordena
+    izq_nodes = [n for n in G.nodes if G.nodes[n]["station"] == estaciones[0]]
+                                                  #"] == estaciones[0]]
+    der_nodes = [n for n in G.nodes if G.nodes[n]["station"] == estaciones[1]]
+    izq_nodes.sort(key=lambda x: G.nodes[x]["time"])
+    der_nodes.sort(key=lambda x: G.nodes[x]["time"])
+
+    escala_horarios = 5
+
+    # asignar posiciones
+    for i, node in enumerate(izq_nodes):
+        pos[node] = (1, -i * escala_horarios * 2)
+    for i, node in enumerate(der_nodes):
+        pos[node] = (2, -i * escala_horarios * 2)
+
+    plt.figure()  
+    plt.title(f"Cant total de vagones: {sum(cant_minima_vagones(G))}")
+    # nodos
+    nx.draw_networkx_nodes(G, pos, node_size=500, node_color="azure")
+
+    # aristas para VIAJES
+    nx.draw_networkx_edges( G, pos, node_size=800,
+        edgelist=[(u, v) for u, v, d in G.edges(data=True) if d["type"] == "servicio"],
+    )
+
+    # aristas para TRASPASO
+    nx.draw_networkx_edges( G, pos, node_size=800,
+        edgelist=[(u, v) for u, v, d in G.edges(data=True) if d["type"] == "traspaso"],
+    )
+
+    # aristas para TRASNOCHE (lado izquierdo)
+    nx.draw_networkx_edges( G, pos, node_size=800,
+        edgelist=[
+            (u, v)
+            for u, v, d in G.edges(data=True)
+            if d["type"] == "trasnoche" and (G.nodes[u]["station"] == estaciones[0])
+        ],
+        connectionstyle="arc3,rad=-0.5",
+    )
+
+    # aristas para TRASNOCHE (lado derecho)
+    nx.draw_networkx_edges( G, pos, node_size=800,
+        edgelist=[
+            (u, v)
+            for u, v, d in G.edges(data=True)
+            if d["type"] == "trasnoche" and (G.nodes[u]["station"] == estaciones[1])
+        ],
+        connectionstyle="arc3,rad=0.5",
+    )
+
+    # etiquetas nodos
+    node_labels = {node: node.split("_")[0] for node in G.nodes}
+    nx.draw_networkx_labels(G, pos, node_labels, font_size=10)
+
+    edge_labels = {}
+    edge_labels_intra = {}
+
+    tras = []
+    # etiquetas aristas
+    for u, v, d in G.edges(data=True):
+        flujo = flow_dict[u][v] if u in flow_dict and v in flow_dict[u] else 0
+        etiqueta = G.edges[(u, v)]["capacity"]
+        
+        # estaciones distintas
+        if not set(u.split("_")) & set(v.split("_")):
+            edge_labels[(u, v)] = f"{flujo}/25"
+
+        # estaciones iguales
+        else:
+            edge_labels_intra[(u, v)] = f"{flujo}"
+            
+            if d["type"] == "trasnoche":
+                tras.append (f"{flujo}")
+
+    pos_labels = {
+        "C Trasnoche A":(0.805,-24),
+        "C Trasnoche B": (2.168,-24),
+    }
+
+    nx.draw_networkx_labels(G, pos_labels, labels={"C Trasnoche A":tras[0],"C Trasnoche B":tras[1]},font_size=10)
+
+
+    pos_estaciones = {
+        "Estacion A": (1.01, 3.5), 
+        "Estacion B": (2, 3.5), 
+    }
+    
+    nx.draw_networkx_labels(G, pos_estaciones, labels={"Estacion A": estaciones[0], "Estacion B": estaciones[1]})
+
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels_intra, rotate=False)
+
+
+    plt.show()
 
 
 def main():
@@ -167,8 +262,7 @@ def main():
 
     # Crea el grafo dirigido
     G = construir_grafo(data)
-    flow = nx.min_cost_flow(G)
-    print(f"\nFlow: {flow}")
+
     # #imprimo las aristas y su contenido entero
     # for u, v, data in G.edges(data=True):
     #     print(f"Arista de {u} a {v}: {data}")
@@ -177,21 +271,20 @@ def main():
     # for nodo, data in G.nodes(data=True):
     #     print(f"Nodo: {nodo}, Data: {data}")
     
-    # Dibuja el grafo
-    nx.draw(G, with_labels=True)
-    plt.show()
+    # # Dibuja el grafo
+    # nx.draw(G, with_labels=True)
+    # plt.show()
 
     ###### VERIFICO ######
     # conservacion de flujo --> sumo todas las demdandas de los nodos y deberia dar 0 
     total_demanda = 0
     for nodo, data in G.nodes(data=True):
         total_demanda += data.get('demand', 0)
-        print(f"\ndemanda: {data.get('demand', 0)}")
     if total_demanda == 0:
         print(f"total_demanda. {total_demanda} --> OK")
 
         # Resolver el problema de flujo de costo mínimo
-        # print(cant_minima_vagones(G))
+        print(cant_minima_vagones(G))
     else:
         print(f"total_demanda. {total_demanda} --> NO OK --> no se conserva el flujo")
 
@@ -202,7 +295,14 @@ def main():
         # print(f"Arista de {u} a {v}, Capacidad: {data.get('capacity', 'No definida')}, Costo: {data.get('cost', 'No definido')}")
 
 
+    # # Plotear el grafo
+    flow_dict = nx.min_cost_flow(G)
 
+    ## Aca hubo un problema al extraer las estaciones usando el .get() --> lo cambie por un hardcodeo
+    estaciones = data.get("station", [])  
+    estaciones = ["Tigre", "Retiro"]
+
+    grafico(G, flow_dict, estaciones)
 
 if __name__ == "__main__":
     main()

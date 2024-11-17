@@ -1,6 +1,7 @@
 import json
 import networkx as nx
 import matplotlib.pyplot as plt
+import math
 
 
 def extraer_paradas(data):
@@ -59,27 +60,31 @@ def extraer_paradas(data):
 
 
 def construir_grafo(data):
-
     maximo_trenes = data["rs_info"]["max_rs"]
     capacidad_vagon = data["rs_info"]["capacity"]
 
     paradas = extraer_paradas(data)
     G = nx.DiGraph()
 
-	# extraigo paradas y creo los nodos
-    for key, servicio in paradas.items():
-         nodo_origen = f"{servicio[0]['estacion']}_{servicio[0]['tiempo']}_{key}"
-         nodo_destino = f"{servicio[1]['estacion']}_{servicio[1]['tiempo']}_{key}"
-         demanda = servicio[1]['demanda']
+    # Extraigo paradas y creo los nodos
+    for servicio in data["services"].values():
+        nodo_origen = servicio["stops"][0]
+        nodo_destino = servicio["stops"][1]
+        demanda = math.ceil(servicio["demand"][0] / data["rs_info"]["capacity"])
 
-		# agrego los nodos
-         G.add_node(nodo_origen, station=servicio[0]['estacion'], time=servicio[0]['tiempo'], type=servicio[0]['tipo'])
-         G.add_node(nodo_destino, station=servicio[1]['estacion'], time=servicio[1]['tiempo'], type=servicio[1]['tipo'])
+        # Crear identificadores únicos para los nodos
+        nodo_origen_id = f"{nodo_origen['station']}, {nodo_origen['time']}"
+        nodo_destino_id = f"{nodo_destino['station']}, {nodo_destino['time']}"
 
-		# agrego la arista que los une con la demanda correspondiente
-        # type service --> hay otros que agrego luego
-         G.add_edge(nodo_origen, nodo_destino, demand=demanda, type='service', capacity=maximo_trenes, costo=0)
+        # Agregar nodos con demanda
+        G.add_node(nodo_origen_id, demanda=demanda)
+        G.add_node(nodo_destino_id, demanda=(-1) * demanda)
 
+        # Agregar la arista que los une con la demanda correspondiente
+        # 'type' es un atributo opcional; 'capacity' y otros también lo son
+        G.add_edge(nodo_origen_id, nodo_destino_id, type='service', capacity=maximo_trenes, costo=0, lower=demanda, upper=maximo_trenes)
+    
+    
     # ######### AGREGAR ARISTAS DE TRANSBORDO Y TRASNOCHE #########
     # agrego las aristas de los servicios de trasnoche y transbordo
     # para eso, primero ordeno los servicios por estacion y tiempo
@@ -92,6 +97,8 @@ def construir_grafo(data):
     for terminales in G.nodes:
 
         # extraigo la estacion del nodo (puede ser tigre o retiro)
+        estacion = G.nodes[]
+
         estacion = G.nodes[terminales]["station"]
         if estacion not in estaciones:
             # si no esta la estacion en el diccionario, la agrego

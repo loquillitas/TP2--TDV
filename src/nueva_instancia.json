@@ -1,0 +1,101 @@
+{
+    "services": {
+        "1": {
+            "stops": [
+                [
+                    105,
+                    "tigre",
+                    "D"
+                ],
+                [
+                    107,
+                    "Retiro",
+                    "A"
+                ]
+            ],
+            "demand": [
+                79
+            ]
+        },
+        "2": {
+            "stops": [
+                [
+                    113,
+                    "tigre",
+                    "D"
+                ],
+                [
+                    114,
+                    "Retiro",
+                    "A"
+                ]
+            ],
+            "demand": [
+                170
+            ]
+        },
+        "3": {
+            "stops": [
+                [
+                    120,
+                    "Retiro",
+                    "D"
+                ],
+                [
+                    122,
+                    "tigre",
+                    "A"
+                ]
+            ],
+            "demand": [
+                83
+            ]
+        },
+        "4": {
+            "stops": [
+                [
+                    142,
+                    "Retiro",
+                    "D"
+                ],
+                [
+                    185,
+                    "tigre",
+                    "A"
+                ]
+            ],
+            "demand": [
+                152
+            ]
+        },
+        "5": {
+            "stops": [
+                [
+                    186,
+                    "Retiro",
+                    "D"
+                ],
+                [
+                    199,
+                    "tigre",
+                    "A"
+                ]
+            ],
+            "demand": [
+                188
+            ]
+        }
+    },
+    "stations": [
+        "tigre",
+        "Retiro"
+    ],
+    "cost_per_unit": {
+        "tigre": 1,
+        "Retiro": 1
+    },
+    "rs_info": {
+        "capacity": 100,
+        "max_rs": 6
+    }
+}
