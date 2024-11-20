@@ -3,9 +3,16 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import math
 
+def extraer_estaciones(data):
+    return data["stations"]
 
 
 def extraer_paradas(data):
+    ### NOTA ###    
+    # esta funcion fue creada primero para entender como estan estructurados los datos
+    # luego se construyo la funcion construir_grafo a partir de la data reordenada por esta funcion
+    # si bien agrega un paso extra, es mas facil de entender y trabajar con la data de esta forma
+
 
     # Creo un diccionario vacío para almacenar las paradas
     # Cada servicio va a estar formado por dos eventos, uno de llegada y otro de salida
@@ -20,8 +27,7 @@ def extraer_paradas(data):
         # Como cada servicio tiene dos eventos, se recorre la lista de paradas por evento
         demanda = 0
         for stop in service_info["stops"]:
-            # print("#########################################################3")
-            # print(f"\nStop: {stop}, tipo: {stop['type']}")
+            
             # Extraer información del evento
             tiempo = stop["time"]
             estacion = stop["station"]
@@ -50,10 +56,10 @@ def extraer_paradas(data):
 
 
 def construir_grafo(data):
+    # Crea un grafo dirigido con NetworkX
+
 
     maximo_trenes = data["rs_info"]["max_rs"]
-    ## EJERCICIO 5 ## --> limite de trenes que pueden pasar la noche
-    # maximo_noche = data["rs_info"]["max_night_capacity"]
     capacidad_vagon = data["rs_info"]["capacity"]
 
     paradas = extraer_paradas(data)
@@ -65,15 +71,14 @@ def construir_grafo(data):
         nodo_destino = f"{servicio[1]['estacion']}_{servicio[1]['tiempo']}_{key}"
         
         # Redondeo la demanda para arriba --> si necesito 4.2 trenes --> entonces necesito 5 trenes
-        demanda = math.ceil(servicio[0]['demanda'] / capacidad_vagon)
-        # demanda = math.ceil(servicio["demand"][0] / data["rs_info"]["capacity"])
-        
+        demanda = math.ceil(servicio[0]['demanda'] / capacidad_vagon)        
 
-        # Agregar los nodos
+
+        # Agregar los NODOS
         G.add_node(nodo_origen, station=servicio[0]['estacion'], demand=demanda, time=servicio[0]['tiempo'], type=servicio[0]['tipo'])
         G.add_node(nodo_destino, station=servicio[1]['estacion'],demand= (-1)*demanda, time=servicio[1]['tiempo'], type=servicio[1]['tipo'])
 
-        # Agregar la arista que une los nodos con la demanda correspondiente
+        # Agregar la ARISTA que une los nodos con la demanda correspondiente
         # Tipo: "service" para indicar que es una arista de servicio
         G.add_edge(nodo_origen, nodo_destino, demand=demanda, type='servicio', capacity=maximo_trenes-demanda, costo=0, min=demanda, max=maximo_trenes) #
         ######################################################################capacity=maximo_trenes-demanda ???? --> si no lo pongo me da negative cycle with infinite capacity found --> preguntar por que
@@ -103,7 +108,6 @@ def construir_grafo(data):
         ##### TRASNOCHE
         nodo_origen = estaciones[estacion][-1]
         nodo_destino = estaciones[estacion][0]
-        ## NOTA EJERCICIO 5 ## --> incorporo el limite de trenes a la cota superior de la arista de TRASNOCHE. Eso seria min = maximo_noche
         G.add_edge(nodo_origen, nodo_destino, demand=0, type='trasnoche', capacity=float("inf"), costo=1, min=0, max=maximo_trenes)
 
         ##### TRASPASO
@@ -112,14 +116,28 @@ def construir_grafo(data):
             nodo_destino = nodos[i + 1]
             G.add_edge(nodo_origen, nodo_destino, demand=0, type='traspaso', capacity=float("inf"), costo=0, min=0, max=maximo_trenes)
 
-    print(f"\nNodos: {G.nodes}\n\nAristas: {G.edges}")
+    # print(f"\nNodos: {G.nodes}\n\nAristas: {G.edges}")
     return G
 
+def mincosto(G):
+    # flujo de costo minimo --> busca reflejar las demandas de los nodos 
+    flow = nx.min_cost_flow(G, "demand", "capacity", "costo")
 
-def cant_minima_vagones(G):
-    # Imprimir demandas de los nodos
-    for nodo, data in G.nodes(data=True):
-        print(f"Nodo: {nodo}, Demanda: {data.get('demand', 0)}")
+    for u, v in G.edges:
+
+        if G.edges[u, v]["type"] == "servicio":
+            # incrementa el flujo en la demanda
+            flow[u][v] += G.nodes[u]["demand"]
+
+    return flow
+
+
+def cant_minima_vagones(G, estaciones):
+
+    # input: un Grafo 
+    # output : una tupla con la cantidad de vagones necesarias para cada estacion terminal
+    # notar que esta función sirve para cualquier instancia con exactamente dos estaciones
+
 
     # Calcula el flujo de costo mínimo en el grafo
     try:
@@ -128,7 +146,7 @@ def cant_minima_vagones(G):
         print("No se puede satisfacer la demanda del grafo; flujo no es factible.")
         return 0, 0
 
-    total_units_retiro = 0
+    total_units_retiro = 0 # fueron instanciadas para trabajar con retiro y tigre pero funciona para cualquier instancia con dos paradas
     total_units_tigre = 0
 
     # Itera sobre los nodos de flujo para contar los vagones en Retiro y Tigre
@@ -137,17 +155,17 @@ def cant_minima_vagones(G):
             # Verifica si la arista es de trasnoche (peso 1)
             if G[u][v]['costo'] == 1:
                 # Suma los vagones en Retiro
-                if 'Retiro' in u or 'Retiro' in v:
+                if estaciones[0] in u or estaciones[0] in v:
                     total_units_retiro += flow[u][v]
                 # Suma los vagones en Tigre
-                elif 'Tigre' in u or 'Tigre' in v:
+                elif estaciones[1] in u or estaciones[1] in v:
                     total_units_tigre += flow[u][v]
 
             # Imprime el flujo en cada arista
-            print(f"Flow from {u} to {v}: {flow[u][v]} units")
+            # print(f"Flow from {u} to {v}: {flow[u][v]} units")
 
-    print(f"Total units at Retiro: {total_units_retiro} vagones")
-    print(f"Total units at Tigre: {total_units_tigre} vagones")
+    print(f"Total units at {estaciones[0]}: {total_units_retiro} vagones")
+    print(f"Total units at {estaciones[1]}: {total_units_tigre} vagones")
     print(f"Total units: {total_units_retiro + total_units_tigre} vagones")
 
     return total_units_retiro, total_units_tigre
@@ -174,7 +192,7 @@ def grafico(G, flow_dict, estaciones):
         pos[node] = (2, -i * escala_horarios * 2)
 
     plt.figure()  
-    plt.title(f"Cant total de vagones: {sum(cant_minima_vagones(G))}")
+    plt.title(f"Cant total de vagones: {sum(cant_minima_vagones(G, estaciones))}")
     # nodos
     nx.draw_networkx_nodes(G, pos, node_size=500, node_color="azure")
 
@@ -219,8 +237,6 @@ def grafico(G, flow_dict, estaciones):
     # etiquetas aristas
     for u, v, d in G.edges(data=True):
         flujo = flow_dict[u][v] if u in flow_dict and v in flow_dict[u] else 0
-        etiqueta = G.edges[(u, v)]["capacity"]
-        
         # estaciones distintas
         if not set(u.split("_")) & set(v.split("_")):
             edge_labels[(u, v)] = f"{flujo}/25"
@@ -256,24 +272,16 @@ def grafico(G, flow_dict, estaciones):
 
 def main():
     filename = "instances/toy_instance.json"
-    print("hola")
-    with open(filename) as json_file:
+
+    with open(filename, "r") as json_file:
         data = json.load(json_file)
+
+    estaciones = extraer_estaciones(data) # nos sirve para graficar --> parametro de la funcion grafico
+    # NOTAR que data ser transforma despues, por lo que es importante extraer la informacion antes de transformarla
 
     # Crea el grafo dirigido
     G = construir_grafo(data)
 
-    # #imprimo las aristas y su contenido entero
-    # for u, v, data in G.edges(data=True):
-    #     print(f"Arista de {u} a {v}: {data}")
-
-    # #imprimo las paradas 
-    # for nodo, data in G.nodes(data=True):
-    #     print(f"Nodo: {nodo}, Data: {data}")
-    
-    # # Dibuja el grafo
-    # nx.draw(G, with_labels=True)
-    # plt.show()
 
     ###### VERIFICO ######
     # conservacion de flujo --> sumo todas las demdandas de los nodos y deberia dar 0 
@@ -281,28 +289,20 @@ def main():
     for nodo, data in G.nodes(data=True):
         total_demanda += data.get('demand', 0)
     if total_demanda == 0:
-        print(f"total_demanda. {total_demanda} --> OK")
+        # si la demanda total es 0, entonces se conserva el flujo
+        print(f"total_demanda: {total_demanda} --> OK")
 
         # Resolver el problema de flujo de costo mínimo
-        print(cant_minima_vagones(G))
+        print(cant_minima_vagones(G, estaciones))
     else:
-        print(f"total_demanda. {total_demanda} --> NO OK --> no se conserva el flujo")
+        print(f"total_demanda: {total_demanda} --> NO OK: no se conserva el flujo")
 
 
 
-    # Verificar capacidades y costos en las aristas
-    # for u, v, data in G.edges(data=True):
-        # print(f"Arista de {u} a {v}, Capacidad: {data.get('capacity', 'No definida')}, Costo: {data.get('cost', 'No definido')}")
-
-
-    # # Plotear el grafo
-    flow_dict = nx.min_cost_flow(G)
-
-    ## Aca hubo un problema al extraer las estaciones usando el .get() --> lo cambie por un hardcodeo
-    estaciones = data.get("station", [])  
-    estaciones = ["Tigre", "Retiro"]
-
+    # Plotear el grafo
+    flow_dict = mincosto(G)  
     grafico(G, flow_dict, estaciones)
+
 
 if __name__ == "__main__":
     main()
