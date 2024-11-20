@@ -265,7 +265,7 @@ def plotear(G, flow_dict, estaciones, solucion):
 
 def main():
 
-    filename = "instances/toy_instance.json"
+    filename = "instances/cardales-victoria-semana.json"
     with open(filename) as json_file:
         data = json.load(json_file)
 

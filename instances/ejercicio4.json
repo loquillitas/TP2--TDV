@@ -1,0 +1,101 @@
+{
+    "services": {
+        "0": {
+            "stops": [
+                {
+                    "time": 344,
+                    "station": "Tigre",
+                    "type": "D"
+                },
+                {
+                    "time": 400,
+                    "station": "Retiro",
+                    "type": "A"
+                }
+            ],
+            "demand": [
+                79
+            ]
+        },
+        "1": {
+            "stops": [
+                {
+                    "time": 366,
+                    "station": "Tigre",
+                    "type": "D"
+                },
+                {
+                    "time": 422,
+                    "station": "Retiro",
+                    "type": "A"
+                }
+            ],
+            "demand": [
+                170
+            ]
+        },
+        "2": {
+            "stops": [
+                {
+                    "time": 410,
+                    "station": "Retiro",
+                    "type": "D"
+                },
+                {
+                    "time": 466,
+                    "station": "Tigre",
+                    "type": "A"
+                }
+            ],
+            "demand": [
+                83
+            ]
+        },
+        "3": {
+            "stops": [
+                {
+                    "time": 432,
+                    "station": "Retiro",
+                    "type": "D"
+                },
+                {
+                    "time": 488,
+                    "station": "Tigre",
+                    "type": "A"
+                }
+            ],
+            "demand": [
+                152
+            ]
+        },
+        "4": {
+            "stops": [
+                {
+                    "time": 454,
+                    "station": "Retiro",
+                    "type": "D"
+                },
+                {
+                    "time": 510,
+                    "station": "Tigre",
+                    "type": "A"
+                }
+            ],
+            "demand": [
+                188
+            ]
+        }
+    },
+    "stations": [
+        "Tigre",
+        "Retiro"
+    ],
+    "cost_per_unit": {
+        "Tigre": 1,
+        "Retiro": 1
+    },
+    "rs_info": {
+        "capacity": 100,
+        "max_rs": 5
+    }
+}

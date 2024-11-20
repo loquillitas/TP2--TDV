@@ -9,7 +9,7 @@ instance['stations'] = ['Tigre','Retiro']
 instance['cost_per_unit'] = {'Tigre' : 1.0, 'Retiro' : 1.0}
 
 
-filename = 'tools/nueva_instancia.csv'
+filename = 'tools/ejercicio4.csv'
 # Open the CSV file in read mode
 with open(filename , 'r') as csvfile:
     # Create a CSV reader object

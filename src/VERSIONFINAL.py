@@ -8,12 +8,15 @@ def extraer_estaciones(data):
 
 
 def extraer_paradas(data):
-    ### NOTA ###    
-    # esta funcion fue creada primero para entender como estan estructurados los datos
-    # luego se construyo la funcion construir_grafo a partir de la data reordenada por esta funcion
-    # si bien agrega un paso extra, es mas facil de entender y trabajar con la data de esta forma
+    """
+    esta funcion fue creada primero para entender como estan estructurados los datos
+    luego se construyo la funcion construir_grafo a partir de la data reordenada por esta funcion
+    si bien agrega un paso extra, es mas facil de entender y trabajar con la data de esta forma
 
-
+    input: data
+    res: paradas:dict
+    """
+    
     # Creo un diccionario vacío para almacenar las paradas
     # Cada servicio va a estar formado por dos eventos, uno de llegada y otro de salida
     # En otras palabras, vamos a guardar dos paradas por cada key del diccionario, ambas forman parte del mismo servicio y "comparten demanda"
@@ -51,12 +54,17 @@ def extraer_paradas(data):
             # Agregar la parada a la lista del servicio
             paradas[service_id].append(parada)
 
-    print(f"\nParadas: {paradas}")
+    # print(f"\nParadas: {paradas}")
     return paradas
 
 
 def construir_grafo(data):
-    # Crea un grafo dirigido con NetworkX
+    """
+    Crea un grafo dirigido con NetworkX --> tambien agrega aristas de trasbordo y trasnoche
+    input: data
+    res: G
+    type(res): nx.DiGraph
+    """
 
 
     maximo_trenes = data["rs_info"]["max_rs"]
@@ -120,7 +128,15 @@ def construir_grafo(data):
     return G
 
 def mincosto(G):
-    # flujo de costo minimo --> busca reflejar las demandas de los nodos 
+    """
+    Calcula el flujo de costo mínimo en un grafo dirigido.
+    flujo de costo minimo --> busca reflejar las demandas de los nodos 
+
+    input: G
+    res: flujo de costo minimo 
+    type(res): dict
+    """
+
     flow = nx.min_cost_flow(G, "demand", "capacity", "costo")
 
     for u, v in G.edges:
@@ -133,45 +149,48 @@ def mincosto(G):
 
 
 def cant_minima_vagones(G, estaciones):
+    """
+    Calcula la cantidad mínima de vagones necesarios para cada estación terminal.
 
-    # input: un Grafo 
-    # output : una tupla con la cantidad de vagones necesarias para cada estacion terminal
-    # notar que esta función sirve para cualquier instancia con exactamente dos estaciones
+    input:
+        G: Un grafo dirigido que representa el problema.
+        estaciones: Lista de nombres de estaciones terminales.
 
+    res:
+        Un diccionario con la cantidad total de vagones en cada estación terminal.
+    """
+
+    # Inicializa un diccionario para almacenar los totales por estación
+    total_units = {estacion: 0 for estacion in estaciones}
 
     # Calcula el flujo de costo mínimo en el grafo
     try:
         flow = nx.min_cost_flow(G)
     except nx.NetworkXUnfeasible:
         print("No se puede satisfacer la demanda del grafo; flujo no es factible.")
-        return 0, 0
+        return total_units
 
-    total_units_retiro = 0 # fueron instanciadas para trabajar con retiro y tigre pero funciona para cualquier instancia con dos paradas
-    total_units_tigre = 0
-
-    # Itera sobre los nodos de flujo para contar los vagones en Retiro y Tigre
+    # Itera sobre los nodos de flujo para contar los vagones en cada estación terminal
     for u in flow:
         for v in flow[u]:
             # Verifica si la arista es de trasnoche (peso 1)
             if G[u][v]['costo'] == 1:
-                # Suma los vagones en Retiro
-                if estaciones[0] in u or estaciones[0] in v:
-                    total_units_retiro += flow[u][v]
-                # Suma los vagones en Tigre
-                elif estaciones[1] in u or estaciones[1] in v:
-                    total_units_tigre += flow[u][v]
+                # Suma los vagones en las estaciones terminales
+                for estacion in estaciones:
+                    if estacion in u or estacion in v:
+                        total_units[estacion] += flow[u][v]
 
-            # Imprime el flujo en cada arista
-            # print(f"Flow from {u} to {v}: {flow[u][v]} units")
+    # # Imprime el resultado por estación
+    # for estacion, total in total_units.items():
+    #     print(f"Total units at {estacion}: {total} vagones")
 
-    print(f"Total units at {estaciones[0]}: {total_units_retiro} vagones")
-    print(f"Total units at {estaciones[1]}: {total_units_tigre} vagones")
-    print(f"Total units: {total_units_retiro + total_units_tigre} vagones")
-
-    return total_units_retiro, total_units_tigre
+    return total_units
 
 
 def grafico(G, flow_dict, estaciones):
+    """
+    Grafica el grafo dirigido con NetworkX.
+    """
 
     # posicion de los nodos
     pos = {}
@@ -192,7 +211,11 @@ def grafico(G, flow_dict, estaciones):
         pos[node] = (2, -i * escala_horarios * 2)
 
     plt.figure()  
-    plt.title(f"Cant total de vagones: {sum(cant_minima_vagones(G, estaciones))}")
+    # sumo los values de cant_minima_vagones para obtener la cantidad total de vagones
+    total = sum(cant_minima_vagones(G, estaciones).values())
+    plt.title(f"Cant total de vagones: {total}")
+
+    
     # nodos
     nx.draw_networkx_nodes(G, pos, node_size=500, node_color="azure")
 
@@ -270,8 +293,45 @@ def grafico(G, flow_dict, estaciones):
     plt.show()
 
 
+import json
+
+def combinar_json(json1, json2):
+    """
+    junta dos instancias JSON en una única instancia.
+
+    in: json1 + json2  
+    res: dict: JSON combinado.
+    """
+
+    combinado = {
+        "services": {},
+        "stations": [],
+        "cost_per_unit": {},
+        "rs_info": {
+            "capacity": max(json1["rs_info"]["capacity"], json2["rs_info"]["capacity"]),
+            "max_rs": max(json1["rs_info"]["max_rs"], json2["rs_info"]["max_rs"]),
+        }
+    }
+
+    # Combinar los servicios
+    combinado["services"].update(json1["services"])
+    combinado["services"].update(json2["services"])
+
+    # Combinar las estaciones (sin duplicados)
+    combinado["stations"] = list(set(json1["stations"] + json2["stations"]))
+
+    # Combinar los costos por unidad (promediamos si hay duplicados)
+    for estacion in combinado["stations"]:
+        costo1 = json1["cost_per_unit"].get(estacion, 0)
+        costo2 = json2["cost_per_unit"].get(estacion, 0)
+        combinado["cost_per_unit"][estacion] = max(costo1, costo2)
+
+    return combinado
+
+
 def main():
-    filename = "instances/ejercicio4.json"
+
+    filename = "instances/retiro-tigre-semana.json"
 
     with open(filename, "r") as json_file:
         data = json.load(json_file)
@@ -282,12 +342,12 @@ def main():
     # Crea el grafo dirigido
     G = construir_grafo(data)
 
-
     ###### VERIFICO ######
     # conservacion de flujo --> sumo todas las demdandas de los nodos y deberia dar 0 
     total_demanda = 0
     for nodo, data in G.nodes(data=True):
         total_demanda += data.get('demand', 0)
+
     if total_demanda == 0:
         # si la demanda total es 0, entonces se conserva el flujo
         print(f"total_demanda: {total_demanda} --> OK")
@@ -298,11 +358,45 @@ def main():
         print(f"total_demanda: {total_demanda} --> NO OK: no se conserva el flujo")
 
 
-
     # Plotear el grafo
     flow_dict = mincosto(G)  
-    grafico(G, flow_dict, estaciones)
+    # grafico(G, flow_dict, estaciones)
 
+
+
+    ### EJERCICIO 5 ###
+    # Combinar dos instancias JSON
+    # Cargo los archivos JSON
+    with open('instances/cardales-victoria-semana.json', 'r') as file1:
+        json1 = json.load(file1)
+
+    with open('instances/retiro-tigre-semana.json', 'r') as file2:
+        json2 = json.load(file2)
+
+    # Junto los .json
+    json_combinado = combinar_json(json1, json2)
+
+    # los guardo en un nuevo archivo :P
+    with open('instancia_combinada.json', 'w') as outfile:
+        json.dump(json_combinado, outfile, indent=4)
+
+
+    # Veo la cantidad total si corro por separado los dos ramales
+    estacionesRetiroTigre = extraer_estaciones(json1)
+    G1 = construir_grafo(json1)
+    vagonesRetiroTigre = cant_minima_vagones(G1, estacionesRetiroTigre)
+
+    estacionesCardalesVictoria = extraer_estaciones(json2)
+    G2 = construir_grafo(json2)
+    vagonesCardalesVictoria = cant_minima_vagones(G2, estacionesCardalesVictoria)
+
+    # Veo la cantidad total si corro los dos ramales juntos
+    estacionesCombinado = extraer_estaciones(json_combinado) 
+    GComb = construir_grafo(json_combinado)
+    vagonesCombinado = cant_minima_vagones(GComb, estacionesCombinado)
+
+    print(f"\nVagones totales por separado:\n - Retiro-Tigre: {vagonesRetiroTigre}\n - Cardales-Victoria: {vagonesCardalesVictoria}")
+    print(f"\nVagones totales combinados: \n - {vagonesCombinado}\n")
 
 if __name__ == "__main__":
     main()
